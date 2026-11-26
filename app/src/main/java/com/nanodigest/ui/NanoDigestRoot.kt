@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,7 +44,7 @@ import com.nanodigest.ui.summarize.SummarizeViewModel
 private enum class Tab(val route: String, val label: String, val icon: ImageVector) {
     SUMMARIZE("summarize", "Summarize", Icons.Outlined.AutoAwesome),
     HISTORY("history", "History", Icons.Outlined.History),
-    ENGINE("engine", "Engine", Icons.Outlined.Memory),
+    ENGINE("settings", "Settings", Icons.Outlined.Tune),
 }
 
 @Composable
@@ -73,13 +75,17 @@ fun NanoDigestRoot(container: AppContainer) {
     Scaffold(
         bottomBar = {
             if (currentRoute in Tab.entries.map { it.route }) {
-                NavigationBar {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
                     Tab.entries.forEach { tab ->
                         NavigationBarItem(
                             selected = currentRoute == tab.route,
                             onClick = { nav.selectTab(tab) },
                             icon = { Icon(tab.icon, contentDescription = null) },
                             label = { Text(tab.label) },
+                            colors = NavigationBarItemDefaults.colors(
+                                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            ),
                         )
                     }
                 }

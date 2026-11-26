@@ -23,9 +23,9 @@ class ExtractiveEngineTest {
     @Test
     fun chatSummaryFavoursTheDecision() {
         val chat = ChatFormatter.parse(SampleTexts.teamChat).formatted
-        val picks = engine.rank(chat, 3, conversation = true)
+        val picks = engine.keyPoints(chat, 3, conversation = true)
         assertEquals(3, picks.size)
-        assertTrue("expected the decision line in $picks", picks.any { it.startsWith("Priya: Decision") })
+        assertTrue("expected the decision line in $picks", picks.any { it.startsWith("Decision:") })
     }
 
     @Test

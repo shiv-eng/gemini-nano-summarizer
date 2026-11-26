@@ -4,7 +4,10 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -17,65 +20,64 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Clear
+import androidx.compose.material.icons.outlined.ArrowDropDown
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material.icons.outlined.StopCircle
-import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nanodigest.core.engine.Availability
 import com.nanodigest.core.engine.EngineMode
+import com.nanodigest.core.engine.EngineStatus
 import com.nanodigest.core.engine.InputKind
 import com.nanodigest.core.engine.SummaryLanguage
 import com.nanodigest.data.TextImporter
 import com.nanodigest.ui.SampleTexts
-import com.nanodigest.ui.components.EngineStatusCard
+import com.nanodigest.ui.components.BrandMark
+import com.nanodigest.ui.components.GradientButton
 import com.nanodigest.ui.components.InfoCard
-import com.nanodigest.ui.components.SectionTitle
+import com.nanodigest.ui.components.KeyPoints
+import com.nanodigest.ui.components.SoftCard
+import com.nanodigest.ui.components.StatusPill
 import com.nanodigest.ui.components.copyToClipboard
+import com.nanodigest.ui.components.engineSummary
 import com.nanodigest.ui.components.formatMs
 import com.nanodigest.ui.components.readClipboard
 import com.nanodigest.ui.components.rememberSpeaker
@@ -84,7 +86,7 @@ import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SummarizeScreen(vm: SummarizeViewModel) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -93,285 +95,304 @@ fun SummarizeScreen(vm: SummarizeViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val speaker = rememberSpeaker()
-    var menuOpen by remember { mutableStateOf(false) }
-    var previewOpen by rememberSaveable { mutableStateOf(false) }
     val numbers = remember { NumberFormat.getIntegerInstance() }
+    var menuOpen by remember { mutableStateOf(false) }
+    var engineInfoOpen by remember { mutableStateOf(false) }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             scope.launch {
                 runCatching { TextImporter.read(context, uri) }
-                    .onSuccess { vm.setInput(it.text, it.name ?: "Imported file") }
-                    .onFailure { Toast.makeText(context, it.message ?: "Import failed", Toast.LENGTH_LONG).show() }
+                    .onSuccess { vm.setInput(it.text, it.name ?: "File") }
+                    .onFailure { Toast.makeText(context, "Couldn't open that file", Toast.LENGTH_LONG).show() }
             }
         }
     }
+    val openFile = { importLauncher.launch(arrayOf("text/plain", "application/zip")) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Nano Digest") },
-                actions = {
-                    IconButton(onClick = { importLauncher.launch(arrayOf("text/plain", "application/zip")) }) {
-                        Icon(Icons.Outlined.FileOpen, contentDescription = "Import .txt or WhatsApp export")
-                    }
-                    IconButton(onClick = { menuOpen = true }) { Icon(Icons.Outlined.MoreVert, contentDescription = "More") }
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        DropdownMenuItem(text = { Text("Try a sample team chat") }, onClick = {
-                            menuOpen = false
-                            vm.setInput(SampleTexts.teamChat, "Sample chat")
-                        })
-                        DropdownMenuItem(text = { Text("Try a sample article") }, onClick = {
-                            menuOpen = false
-                            vm.setInput(SampleTexts.article, "Sample article")
-                        })
-                    }
-                },
+    Column(
+        Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .imePadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp),
+    ) {
+        // Header
+        Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            BrandMark()
+            Spacer(Modifier.width(10.dp))
+            Text(
+                "Nano Digest",
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.weight(1f),
             )
-        },
-    ) { padding ->
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .imePadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            EngineStatusCard(engine, settings.engineMode, onDownload = vm::downloadModel)
+            StatusPill(engineSummary(engine, settings.engineMode), onClick = { engineInfoOpen = true })
+            Box {
+                IconButton(onClick = { menuOpen = true }) { Icon(Icons.Outlined.MoreVert, contentDescription = "More") }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(text = { Text("Try an example chat") }, onClick = {
+                        menuOpen = false
+                        vm.setInput(SampleTexts.teamChat, "Example chat")
+                    })
+                    DropdownMenuItem(text = { Text("Try an example article") }, onClick = {
+                        menuOpen = false
+                        vm.setInput(SampleTexts.article, "Example article")
+                    })
+                    DropdownMenuItem(text = { Text("Open a file") }, onClick = {
+                        menuOpen = false
+                        openFile()
+                    })
+                }
+            }
+        }
 
-            OutlinedTextField(
-                value = state.input,
-                onValueChange = vm::onInputChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 160.dp),
-                label = { Text(state.sourceLabel ?: "Paste a chat, notes or an article") },
-                placeholder = { Text("Or share text / a WhatsApp export to Nano Digest, or select text anywhere → Summarize") },
-                minLines = 6,
-                maxLines = 12,
-            )
+        Spacer(Modifier.height(28.dp))
+        Text("What did you miss?", style = MaterialTheme.typography.headlineMedium)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Paste a group chat or an article and get the key points in seconds. Nothing leaves your phone.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(20.dp))
 
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                AssistChip(
-                    onClick = {
-                        val clip = readClipboard(context)
-                        if (clip.isNullOrBlank()) Toast.makeText(context, "Clipboard is empty", Toast.LENGTH_SHORT).show()
-                        else vm.setInput(clip, "From clipboard")
-                    },
-                    label = { Text("Paste") },
-                    leadingIcon = { Icon(Icons.Outlined.ContentPaste, null, Modifier.size(18.dp)) },
+        // Input
+        SoftCard {
+            Column {
+                TextField(
+                    value = state.input,
+                    onValueChange = vm::onInputChange,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 150.dp),
+                    placeholder = { Text("Paste messages or text here…") },
+                    minLines = 5,
+                    maxLines = 10,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                    ),
                 )
-                if (state.input.isNotEmpty()) {
-                    AssistChip(
-                        onClick = vm::clear,
-                        label = { Text("Clear") },
-                        leadingIcon = { Icon(Icons.Outlined.Clear, null, Modifier.size(18.dp)) },
-                    )
-                }
-                if (state.chat != null || (state.preparedText.isNotEmpty() && state.preparedText != state.input.trim())) {
-                    AssistChip(
-                        onClick = { previewOpen = true },
-                        label = { Text("Preview cleaned input") },
-                        leadingIcon = { Icon(Icons.Outlined.Visibility, null, Modifier.size(18.dp)) },
-                    )
-                }
-            }
-
-            if (state.stats.chars > 0) {
-                InputSummaryLine(state, numbers, settings.engineMode)
-            }
-
-            SectionTitle("Input type")
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                InputKind.entries.forEachIndexed { i, kind ->
-                    SegmentedButton(
-                        selected = state.inputKind == kind,
-                        onClick = { vm.setInputKind(kind) },
-                        shape = SegmentedButtonDefaults.itemShape(i, InputKind.entries.size),
-                    ) {
-                        Text(
-                            if (kind == InputKind.AUTO && state.input.isNotBlank()) "Auto · ${state.resolvedKind.label}" else kind.label,
-                        )
-                    }
-                }
-            }
-
-            SectionTitle("Bullets")
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                (1..3).forEach { n ->
-                    SegmentedButton(
-                        selected = state.bullets == n,
-                        onClick = { vm.setBullets(n) },
-                        shape = SegmentedButtonDefaults.itemShape(n - 1, 3),
-                    ) { Text("$n") }
-                }
-            }
-
-            if (state.resolvedKind == InputKind.CONVERSATION) {
-                SectionTitle("Catch up on")
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(0 to "All messages", 50 to "Last 50", 100 to "Last 100", 200 to "Last 200").forEach { (n, label) ->
-                        FilterChip(selected = state.lastN == n, onClick = { vm.setLastN(n) }, label = { Text(label) })
-                    }
-                }
-            }
-
-            SectionTitle("Output language")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SummaryLanguage.entries.forEach { lang ->
-                    FilterChip(selected = state.language == lang, onClick = { vm.setLanguage(lang) }, label = { Text(lang.label) })
-                }
-            }
-            if (!state.languageSupported && settings.engineMode != EngineMode.EXTRACTIVE) {
-                InfoCard(
-                    "Detected language: ${Locale.forLanguageTag(state.detectedLanguage ?: "").displayLanguage}. " +
-                        "Gemini Nano summarizes English, Japanese and Korean, so the offline engine will be used.",
-                )
-            }
-            if (state.tooShortForNano && settings.engineMode != EngineMode.EXTRACTIVE) {
-                InfoCard("Short text (${state.stats.chars} chars). Gemini Nano works best with 400+ characters.")
-            }
-
-            Spacer(Modifier.height(4.dp))
-            if (state.running) {
-                FilledTonalButton(onClick = vm::cancel, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-                    Icon(Icons.Outlined.Stop, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Stop")
-                }
-            } else {
-                Button(
-                    onClick = vm::summarize,
-                    enabled = state.input.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, bottom = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Outlined.AutoAwesome, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Summarize")
-                }
-            }
-
-            state.stage?.let { stage ->
-                Column {
-                    Text(stage.label, style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.height(4.dp))
-                    if (stage.totalSteps > 1) {
-                        LinearProgressIndicator(
-                            progress = { (stage.step - 1).toFloat() / stage.totalSteps },
-                            modifier = Modifier.fillMaxWidth(),
+                    if (state.input.isEmpty()) {
+                        SmallAction(Icons.Outlined.ContentPaste, "Paste") {
+                            val clip = readClipboard(context)
+                            if (clip.isNullOrBlank()) Toast.makeText(context, "Nothing copied yet", Toast.LENGTH_SHORT).show()
+                            else vm.setInput(clip, null)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        SmallAction(Icons.Outlined.FileOpen, "Open file", openFile)
+                    } else {
+                        SmallAction(Icons.Outlined.Close, "Clear", vm::clear)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    if (state.stats.words > 0) {
+                        Text(
+                            "${numbers.format(state.stats.words)} words",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                    } else if (state.output.isEmpty()) {
-                        LinearProgressIndicator(Modifier.fillMaxWidth())
                     }
                 }
             }
+        }
 
-            state.notice?.let { InfoCard(it, onDismiss = vm::dismissNotice) }
-            state.error?.let { InfoCard(it, isError = true, onDismiss = vm::dismissNotice) }
+        // What we detected, in plain words
+        if (state.stats.chars > 0) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                detectedLine(state, numbers),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
+        }
 
-            AnimatedVisibility(visible = state.output.isNotEmpty()) {
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Summary", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                            state.result?.let { r ->
-                                Text(r.engine.shortLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                            }
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        SelectionContainer {
-                            Text(state.output, style = MaterialTheme.typography.bodyLarge)
-                        }
+        // Options as compact dropdown chips
+        Spacer(Modifier.height(12.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            DropdownChip(
+                label = "${state.bullets} key point${if (state.bullets > 1) "s" else ""}",
+                options = listOf("1 key point", "2 key points", "3 key points"),
+                onSelect = { vm.setBullets(it + 1) },
+            )
+            DropdownChip(
+                label = when (state.inputKind) {
+                    InputKind.AUTO -> "Type: auto"
+                    InputKind.ARTICLE -> "Type: article"
+                    InputKind.CONVERSATION -> "Type: chat"
+                },
+                options = listOf("Detect automatically", "It's an article or notes", "It's a chat"),
+                onSelect = { vm.setInputKind(InputKind.entries[it]) },
+            )
+            if (state.resolvedKind == InputKind.CONVERSATION) {
+                val windows = listOf(0, 50, 100, 200)
+                DropdownChip(
+                    label = if (state.lastN == 0) "All messages" else "Last ${state.lastN} messages",
+                    options = listOf("All messages", "Last 50 messages", "Last 100 messages", "Last 200 messages"),
+                    onSelect = { vm.setLastN(windows[it]) },
+                )
+            }
+            DropdownChip(
+                label = state.language.label,
+                options = SummaryLanguage.entries.map { it.label },
+                onSelect = { vm.setLanguage(SummaryLanguage.entries[it]) },
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
+        if (state.running) {
+            OutlinedButton(onClick = vm::cancel, modifier = Modifier.fillMaxWidth().height(56.dp), shape = CircleShape) {
+                Text("Stop")
+            }
+        } else {
+            GradientButton("Summarize", onClick = vm::summarize, enabled = state.input.isNotBlank())
+        }
+
+        state.stage?.let { stage ->
+            Spacer(Modifier.height(14.dp))
+            Text(
+                if (stage.totalSteps > 1) stage.label else "Reading…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(6.dp))
+            if (stage.totalSteps > 1) {
+                LinearProgressIndicator(progress = { (stage.step - 1).toFloat() / stage.totalSteps }, modifier = Modifier.fillMaxWidth())
+            } else if (state.output.isEmpty()) {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
+        }
+
+        state.notice?.let {
+            Spacer(Modifier.height(12.dp))
+            InfoCard(it, onDismiss = vm::dismissNotice)
+        }
+        state.error?.let {
+            Spacer(Modifier.height(12.dp))
+            InfoCard(it, isError = true, onDismiss = vm::dismissNotice)
+        }
+
+        // Result
+        AnimatedVisibility(
+            visible = state.output.isNotEmpty(),
+            enter = fadeIn() + slideInVertically { it / 6 },
+        ) {
+            Column {
+                Spacer(Modifier.height(20.dp))
+                SoftCard {
+                    Column(Modifier.padding(20.dp)) {
+                        Text("Key points", style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.height(16.dp))
+                        SelectionContainer { KeyPoints(state.output) }
                         state.result?.let { r ->
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                "${r.engine.shortLabel} · ready in ${formatMs(r.totalMs)} · double-check anything important",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                             Spacer(Modifier.height(8.dp))
-                            val parts = buildList {
-                                r.firstTokenMs?.let { add("first words in ${formatMs(it)}") }
-                                add("done in ${formatMs(r.totalMs)}")
-                                if (r.chunks > 1) add("${r.chunks} parts combined")
-                            }
-                            Text(
-                                parts.joinToString(" · ").replaceFirstChar { it.uppercase() },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                "AI-generated on your device — check important details.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Row {
-                                TextButton(onClick = {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                SmallAction(Icons.Outlined.ContentCopy, "Copy") {
                                     copyToClipboard(context, "Summary", state.output)
                                     Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
-                                }) {
-                                    Icon(Icons.Outlined.ContentCopy, null, Modifier.size(18.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text("Copy")
                                 }
-                                TextButton(onClick = { shareText(context, vm.shareText()) }) {
-                                    Icon(Icons.Outlined.Share, null, Modifier.size(18.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text("Share")
-                                }
-                                TextButton(onClick = { speaker.toggle(state.output, Locale.forLanguageTag(state.language.code)) }) {
-                                    Icon(
-                                        if (speaker.speaking) Icons.Outlined.StopCircle else Icons.AutoMirrored.Outlined.VolumeUp,
-                                        null,
-                                        Modifier.size(18.dp),
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(if (speaker.speaking) "Stop" else "Listen")
-                                }
+                                SmallAction(Icons.Outlined.Share, "Share") { shareText(context, vm.shareText()) }
+                                SmallAction(
+                                    if (speaker.speaking) Icons.Outlined.StopCircle else Icons.AutoMirrored.Outlined.VolumeUp,
+                                    if (speaker.speaking) "Stop" else "Read aloud",
+                                ) { speaker.toggle(state.output, Locale.forLanguageTag(state.language.code)) }
                             }
                         }
                     }
                 }
             }
-            Spacer(Modifier.height(24.dp))
         }
+        Spacer(Modifier.height(32.dp))
     }
 
-    if (previewOpen) {
-        AlertDialog(
-            onDismissRequest = { previewOpen = false },
-            confirmButton = { TextButton(onClick = { previewOpen = false }) { Text("Close") } },
-            title = { Text("What the model will read") },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    state.chat?.let { chat ->
-                        Text(
-                            "Removed timestamps, ${chat.droppedSystemLines} system notices; " +
-                                "${chat.mediaCount} media → placeholders; ${chat.linksReplaced} links → [link].",
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                    }
-                    Text(state.preparedText, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
-                }
-            },
-        )
+    if (engineInfoOpen) {
+        EngineInfoDialog(engine, settings.engineMode, onDownload = vm::downloadModel, onDismiss = { engineInfoOpen = false })
+    }
+}
+
+private fun detectedLine(state: SummarizeUiState, numbers: NumberFormat): String {
+    val chat = state.chat
+    return when {
+        chat != null -> {
+            val shown = if (chat.kept.size < chat.messages.size) "last ${chat.kept.size} of ${chat.messages.size}" else numbers.format(chat.kept.size)
+            "Chat with ${chat.participants.size} people · $shown messages"
+        }
+        state.resolvedKind == InputKind.CONVERSATION -> "Chat"
+        state.chunkCount > 1 -> "Long text · read in ${state.chunkCount} parts"
+        else -> "Article or notes"
     }
 }
 
 @Composable
-private fun InputSummaryLine(state: SummarizeUiState, numbers: NumberFormat, mode: EngineMode) {
-    val parts = buildList {
-        add("${numbers.format(state.stats.chars)} chars")
-        add("~${numbers.format(state.stats.estimatedTokens)} tokens")
-        if (state.chunkCount > 1 && mode != EngineMode.EXTRACTIVE) add("${state.chunkCount} parts (chunk & combine)")
-    }
-    Column {
-        Text(parts.joinToString(" · "), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        state.chat?.let { chat ->
-            val windowNote = if (chat.kept.size < chat.messages.size) " (last ${chat.kept.size} of ${chat.messages.size})" else ""
-            Text(
-                "Chat · ${chat.participants.size} people · ${numbers.format(chat.kept.size)} messages$windowNote" +
-                    if (chat.mediaCount > 0) " · ${chat.mediaCount} media" else "",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+private fun SmallAction(icon: ImageVector, label: String, onClick: () -> Unit) {
+    AssistChip(
+        onClick = onClick,
+        label = { Text(label) },
+        leadingIcon = { Icon(icon, null, Modifier.size(18.dp)) },
+        shape = CircleShape,
+        colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+        border = null,
+    )
+}
+
+@Composable
+private fun DropdownChip(label: String, options: List<String>, onSelect: (Int) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        AssistChip(
+            onClick = { open = true },
+            label = { Text(label) },
+            trailingIcon = { Icon(Icons.Outlined.ArrowDropDown, null, Modifier.size(18.dp)) },
+            shape = CircleShape,
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEachIndexed { i, option ->
+                DropdownMenuItem(text = { Text(option) }, onClick = {
+                    open = false
+                    onSelect(i)
+                })
+            }
         }
     }
+}
+
+@Composable
+private fun EngineInfoDialog(status: EngineStatus, mode: EngineMode, onDownload: () -> Unit, onDismiss: () -> Unit) {
+    val ready = status.availability == Availability.Ready && mode != EngineMode.EXTRACTIVE
+    val downloadable = status.availability == Availability.NeedsDownload && mode != EngineMode.EXTRACTIVE
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (ready) "Gemini Nano AI" else "Quick summary") },
+        text = {
+            Text(
+                when {
+                    ready -> "Summaries are written by Gemini Nano, Google's AI that runs right on your phone. Your text never leaves the device."
+                    downloadable -> "Your phone can use Gemini Nano, Google's on-device AI. It needs a one-time download. Until then, Quick summary picks out the key points."
+                    mode == EngineMode.EXTRACTIVE -> "Quick summary finds the most important points in your text. It's instant and works without the internet."
+                    else -> "This phone doesn't support Gemini Nano, Google's on-device AI. Quick summary finds the most important points instead. It's instant, private and works without the internet."
+                },
+            )
+        },
+        confirmButton = {
+            if (downloadable) {
+                TextButton(onClick = { onDownload(); onDismiss() }) { Text("Download") }
+            } else {
+                TextButton(onClick = onDismiss) { Text("Got it") }
+            }
+        },
+        dismissButton = if (downloadable) ({ TextButton(onClick = onDismiss) { Text("Later") } }) else null,
+    )
 }

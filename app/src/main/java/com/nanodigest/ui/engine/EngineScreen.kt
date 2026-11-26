@@ -1,6 +1,6 @@
 package com.nanodigest.ui.engine
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,24 +8,33 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -35,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.nanodigest.AppContainer
 import com.nanodigest.core.engine.Availability
+import com.nanodigest.core.engine.DownloadState
 import com.nanodigest.core.engine.EngineId
 import com.nanodigest.core.engine.EngineMode
 import com.nanodigest.core.engine.EngineStatus
@@ -45,8 +55,8 @@ import com.nanodigest.core.engine.SummaryEngine
 import com.nanodigest.core.engine.SummaryLanguage
 import com.nanodigest.data.Settings
 import com.nanodigest.ui.SampleTexts
-import com.nanodigest.ui.components.EngineStatusCard
-import com.nanodigest.ui.components.SectionTitle
+import com.nanodigest.ui.components.BrandMark
+import com.nanodigest.ui.components.SoftCard
 import com.nanodigest.ui.components.formatMs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -57,7 +67,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-data class BenchmarkResult(val engine: EngineId, val firstTokenMs: Long?, val totalMs: Long, val error: String? = null)
+data class BenchmarkResult(val engine: EngineId, val totalMs: Long, val error: String? = null)
 
 data class BenchmarkState(val running: Boolean = false, val results: List<BenchmarkResult> = emptyList())
 
@@ -72,12 +82,10 @@ class EngineViewModel(private val c: AppContainer) : ViewModel() {
 
     fun update(transform: (Settings) -> Settings) = c.settings.update(transform)
 
-    fun recheck() = c.modelManager.refresh(status.value.config ?: defaultConfig, autoDownload = false, warmUp = false)
     fun download() = c.modelManager.download(status.value.config ?: defaultConfig)
-    fun warmUp() = c.modelManager.warmUp(status.value.config ?: defaultConfig)
 
-    /** Times both engines on the same sample article: time to first words and total time. */
-    fun runBenchmark() {
+    /** Times each available engine on the same example article. */
+    fun runSpeedTest() {
         if (_benchmark.value.running) return
         viewModelScope.launch {
             _benchmark.value = BenchmarkState(running = true)
@@ -86,22 +94,17 @@ class EngineViewModel(private val c: AppContainer) : ViewModel() {
             val engines: List<SummaryEngine> = listOf(c.nano, c.extractive)
             for (engine in engines) {
                 if (engine.id == EngineId.GEMINI_NANO && c.nano.availability(config) != Availability.Ready) {
-                    results += BenchmarkResult(engine.id, null, 0, "Model not ready on this device")
+                    results += BenchmarkResult(engine.id, 0, "Not available on this phone")
                     continue
                 }
                 val start = System.nanoTime()
-                var first: Long? = null
                 try {
-                    withContext(Dispatchers.Default) {
-                        engine.summarize(SampleTexts.article, config) {
-                            if (first == null) first = (System.nanoTime() - start) / 1_000_000
-                        }
-                    }
-                    results += BenchmarkResult(engine.id, first, (System.nanoTime() - start) / 1_000_000)
+                    withContext(Dispatchers.Default) { engine.summarize(SampleTexts.article, config) }
+                    results += BenchmarkResult(engine.id, (System.nanoTime() - start) / 1_000_000)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (t: Throwable) {
-                    results += BenchmarkResult(engine.id, null, 0, GenAiErrors.describe(t))
+                    results += BenchmarkResult(engine.id, 0, GenAiErrors.describe(t))
                 }
                 _benchmark.update { it.copy(results = results.toList()) }
             }
@@ -110,127 +113,160 @@ class EngineViewModel(private val c: AppContainer) : ViewModel() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EngineScreen(vm: EngineViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val status by vm.status.collectAsStateWithLifecycle()
     val bench by vm.benchmark.collectAsStateWithLifecycle()
+    var advanced by rememberSaveable { mutableStateOf(false) }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Engine & settings") }) }) { padding ->
-        Column(
-            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+    Column(
+        Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp),
+    ) {
+        Spacer(Modifier.height(20.dp))
+        Text("Settings", style = MaterialTheme.typography.headlineMedium)
+        Spacer(Modifier.height(20.dp))
+
+        SummaryMethodCard(status, settings.engineMode, onDownload = vm::download)
+
+        Spacer(Modifier.height(28.dp))
+        Text("Summaries", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(12.dp))
+        Text("Number of key points", style = MaterialTheme.typography.bodyLarge)
+        Spacer(Modifier.height(8.dp))
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            (1..3).forEach { n ->
+                SegmentedButton(
+                    selected = settings.defaultBullets == n,
+                    onClick = { vm.update { it.copy(defaultBullets = n) } },
+                    shape = SegmentedButtonDefaults.itemShape(n - 1, 3),
+                ) { Text("$n") }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        SettingSwitch("Summarize shared text right away", "When you share text to Nano Digest", settings.autoRunSharedText) { v ->
+            vm.update { it.copy(autoRunSharedText = v) }
+        }
+        SettingSwitch("Tidy up chat exports", "Remove dates, times and system messages", settings.cleanChatExports) { v ->
+            vm.update { it.copy(cleanChatExports = v) }
+        }
+        SettingSwitch("Keep history", "Save summaries on this phone", settings.saveHistory) { v ->
+            vm.update { it.copy(saveHistory = v) }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .selectable(selected = advanced, role = Role.Button) { advanced = !advanced }
+                .padding(vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            EngineStatusCard(status, EngineMode.GEMINI_NANO, onDownload = vm::download)
-            status.modelName?.let {
-                Text("Base model: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            status.warmUpMs?.let {
-                Text("Last warm-up: ${formatMs(it)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = vm::recheck) { Text("Check again") }
-                OutlinedButton(onClick = vm::download, enabled = status.availability == Availability.NeedsDownload) { Text("Download") }
-                OutlinedButton(onClick = vm::warmUp, enabled = status.availability == Availability.Ready && !status.warming) { Text("Warm up") }
-            }
+            Text("Advanced", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Icon(if (advanced) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, contentDescription = null)
+        }
 
-            SectionTitle("Engine")
-            EngineMode.entries.forEach { mode ->
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .selectable(selected = settings.engineMode == mode, role = Role.RadioButton) { vm.update { it.copy(engineMode = mode) } }
-                        .padding(vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RadioButton(selected = settings.engineMode == mode, onClick = null)
-                    Column(Modifier.padding(start = 12.dp)) {
-                        Text(mode.label, style = MaterialTheme.typography.bodyLarge)
-                        Text(mode.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-
-            SectionTitle("Benchmark")
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(
-                        "Summarizes a ~2,000 character sample with each engine. 'First words' is what users feel; 'total' is what the model does.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    bench.results.forEach { r ->
-                        Text(
-                            r.engine.shortLabel + ": " + (
-                                r.error ?: listOfNotNull(r.firstTokenMs?.let { "first words ${formatMs(it)}" }, "total ${formatMs(r.totalMs)}")
-                                    .joinToString(" · ")
-                                ),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(onClick = vm::runBenchmark, enabled = !bench.running) {
-                        Text(if (bench.running) "Running…" else "Run benchmark")
-                    }
-                }
-            }
-
-            SectionTitle("Behaviour")
-            Text("Default bullets", style = MaterialTheme.typography.bodyLarge)
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                (1..3).forEach { n ->
-                    SegmentedButton(
-                        selected = settings.defaultBullets == n,
-                        onClick = { vm.update { it.copy(defaultBullets = n) } },
-                        shape = SegmentedButtonDefaults.itemShape(n - 1, 3),
-                    ) { Text("$n") }
-                }
-            }
-            SettingSwitch("Download the model automatically", "Start the one-time AICore download when the app opens", settings.autoDownloadModel) { v ->
-                vm.update { it.copy(autoDownloadModel = v) }
-            }
-            SettingSwitch("Warm up on launch", "Load Gemini Nano before you tap Summarize, so words appear sooner", settings.warmUpOnLaunch) { v ->
-                vm.update { it.copy(warmUpOnLaunch = v) }
-            }
-            SettingSwitch("Clean chat exports", "Strip timestamps and system lines, format as \"Name: message\"", settings.cleanChatExports) { v ->
-                vm.update { it.copy(cleanChatExports = v) }
-            }
-            SettingSwitch("Replace links with [link]", "URLs cost many tokens and rarely matter for a summary", settings.replaceLinks) { v ->
-                vm.update { it.copy(replaceLinks = v) }
-            }
-            SettingSwitch("Auto-summarize shared text", "Run immediately when text arrives from Share or Select → Summarize", settings.autoRunSharedText) { v ->
-                vm.update { it.copy(autoRunSharedText = v) }
-            }
-            SettingSwitch("Save history", "Keep summaries in a local database on this phone", settings.saveHistory) { v ->
-                vm.update { it.copy(saveHistory = v) }
-            }
-
-            SectionTitle("Troubleshooting")
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "Gemini Nano needs a supported phone with a locked bootloader, Wi-Fi for the first download, and a real device (not an emulator).",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    HorizontalDivider()
-                    GenAiErrors.reference.forEach { (code, e) ->
-                        Column {
-                            Text("$code · ${e.title}", style = MaterialTheme.typography.labelLarge)
-                            Text(e.fix, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        AnimatedVisibility(advanced) {
+            Column {
+                Text("Summary method", style = MaterialTheme.typography.bodyLarge)
+                EngineMode.entries.forEach { mode ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .selectable(selected = settings.engineMode == mode, role = Role.RadioButton) { vm.update { it.copy(engineMode = mode) } }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = settings.engineMode == mode, onClick = null)
+                        Column(Modifier.padding(start = 12.dp)) {
+                            Text(mode.label, style = MaterialTheme.typography.bodyLarge)
+                            Text(mode.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
+                SettingSwitch("Download Gemini Nano automatically", "On phones that support it", settings.autoDownloadModel) { v ->
+                    vm.update { it.copy(autoDownloadModel = v) }
+                }
+                SettingSwitch("Get the AI ready when the app opens", "First summary starts faster", settings.warmUpOnLaunch) { v ->
+                    vm.update { it.copy(warmUpOnLaunch = v) }
+                }
+                SettingSwitch("Hide web links", "Links rarely help a summary", settings.replaceLinks) { v ->
+                    vm.update { it.copy(replaceLinks = v) }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = vm::runSpeedTest, enabled = !bench.running, shape = CircleShape) {
+                        Text(if (bench.running) "Testing…" else "Speed test")
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        bench.results.forEach { r ->
+                            Text(
+                                "${r.engine.shortLabel}: ${r.error ?: formatMs(r.totalMs)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
             }
+        }
 
-            SectionTitle("Privacy")
+        Spacer(Modifier.height(16.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Lock, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.width(10.dp))
             Text(
-                "Your text never leaves this phone. It is processed by Gemini Nano inside Android's AICore or by the built-in " +
-                    "offline engine, and history is stored only on this phone and excluded from backups. " +
-                    "Works in airplane mode once the model is downloaded.",
+                "Private by design. Your text is summarized on this phone and is never uploaded.",
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(24.dp))
+        }
+        Spacer(Modifier.height(32.dp))
+    }
+}
+
+@Composable
+private fun SummaryMethodCard(status: EngineStatus, mode: EngineMode, onDownload: () -> Unit) {
+    val download = status.download
+    val nanoMode = mode != EngineMode.EXTRACTIVE
+    val (title, body) = when {
+        !nanoMode -> "Quick summary" to "Finds the most important points in your text. Instant and works without the internet."
+        download is DownloadState.InProgress -> "Getting Gemini Nano ready" to "Google's on-device AI is downloading. You can keep using Quick summary meanwhile."
+        status.availability == null -> "Checking your phone…" to "Seeing whether this phone supports Gemini Nano."
+        status.availability == Availability.Ready -> "Gemini Nano AI is on" to "Google's AI writes your summaries right on this phone."
+        status.availability == Availability.NeedsDownload -> "Gemini Nano is available" to "Your phone supports Google's on-device AI. It needs a one-time download."
+        status.availability == Availability.Downloading -> "Getting Gemini Nano ready" to "Your phone is downloading Google's on-device AI."
+        else -> "Using Quick summary" to "This phone doesn't support Gemini Nano, Google's on-device AI. Quick summary picks out the key points instead. It's instant, private and works offline."
+    }
+    SoftCard {
+        Column(Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                BrandMark()
+                Spacer(Modifier.width(12.dp))
+                Text(title, style = MaterialTheme.typography.titleMedium)
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (nanoMode && download is DownloadState.InProgress) {
+                Spacer(Modifier.height(12.dp))
+                download.fraction?.let { LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth()) }
+                    ?: LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
+            if (nanoMode && status.availability == Availability.NeedsDownload && download !is DownloadState.InProgress) {
+                Spacer(Modifier.height(12.dp))
+                FilledTonalButton(onClick = onDownload, shape = CircleShape) { Text("Download (one time)") }
+            }
+            if (nanoMode && download is DownloadState.Failed) {
+                Spacer(Modifier.height(8.dp))
+                Text("Download didn't finish. Check your Wi-Fi and try again.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
         }
     }
 }
@@ -238,7 +274,7 @@ fun EngineScreen(vm: EngineViewModel) {
 @Composable
 private fun SettingSwitch(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().selectable(selected = checked, role = Role.Switch) { onChange(!checked) }.padding(vertical = 8.dp),
+        Modifier.fillMaxWidth().selectable(selected = checked, role = Role.Switch) { onChange(!checked) }.padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f).padding(end = 12.dp)) {

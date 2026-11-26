@@ -30,15 +30,15 @@ data class SummaryConfig(
 }
 
 enum class EngineId(val label: String, val shortLabel: String) {
-    GEMINI_NANO("Gemini Nano · on-device", "Gemini Nano"),
-    EXTRACTIVE("Offline extractive · any phone", "Extractive"),
+    GEMINI_NANO("Gemini Nano AI", "Gemini Nano"),
+    EXTRACTIVE("Quick summary", "Quick summary"),
 }
 
 /** Which engine(s) the user allows. */
 enum class EngineMode(val label: String, val description: String) {
-    AUTO("Auto", "Gemini Nano when supported, otherwise the offline extractive engine"),
-    GEMINI_NANO("Gemini Nano only", "Fail instead of falling back"),
-    EXTRACTIVE("Offline extractive only", "Fast, works on every phone, picks key sentences verbatim"),
+    AUTO("Automatic", "Use Gemini Nano when this phone has it, otherwise Quick summary"),
+    GEMINI_NANO("Gemini Nano only", "Show an error if Gemini Nano can't run"),
+    EXTRACTIVE("Quick summary only", "Instant, works on every phone"),
 }
 
 sealed interface Availability {

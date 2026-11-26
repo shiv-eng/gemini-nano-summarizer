@@ -19,19 +19,37 @@ class ExtractiveEngine : SummaryEngine {
     override suspend fun availability(config: SummaryConfig): Availability = Availability.Ready
 
     override suspend fun summarize(text: String, config: SummaryConfig, onText: (String) -> Unit): String {
-        val picks = rank(text, config.bullets, config.inputKind == InputKind.CONVERSATION)
+        val picks = keyPoints(text, config.bullets, config.inputKind == InputKind.CONVERSATION)
         val summary = picks.joinToString("\n") { "• $it" }
         picks.forEachIndexed { i, line -> onText((if (i == 0) "" else "\n") + "• " + line) }
         return summary
     }
 
-    /** Returns the [count] most central units of [text], in their original order. */
-    fun rank(text: String, count: Int, conversation: Boolean): List<String> {
-        val units = segment(text, conversation)
-        if (units.isEmpty()) return emptyList()
-        if (units.size <= count) return units.map { shorten(it) }
+    /**
+     * Chats get a structured, reworded digest (what happened / decision / next steps);
+     * everything else gets the most central sentences.
+     */
+    fun keyPoints(text: String, count: Int, conversation: Boolean): List<String> {
+        if (conversation) {
+            val digest = ChatDigest.digest(text, count) { units -> centrality(units) }
+            if (digest.isNotEmpty()) return digest.map { "${it.label}: ${it.text}" }
+            return rank(text, count, conversation = true).map { line ->
+                val idx = line.indexOf(": ")
+                if (idx in 1..40) ChatDigest.rewrite(ChatDigest.Message(0, line.substring(0, idx), line.substring(idx + 2))) else line
+            }
+        }
+        return rank(text, count, conversation = false)
+    }
 
-        val tokens = units.map { tokenize(it) }
+    /** TextRank score of each unit, scaled to 0..1. */
+    fun centrality(units: List<String>): List<Double> {
+        if (units.size < 2) return units.map { 1.0 }
+        val (_, score) = graph(units, units.map { tokenize(it) })
+        val max = score.max().takeIf { it > 0 } ?: 1.0
+        return score.map { it / max }
+    }
+
+    private fun graph(units: List<String>, tokens: List<List<String>>): Pair<Array<DoubleArray>, DoubleArray> {
         val df = HashMap<String, Int>()
         tokens.forEach { set -> set.toSet().forEach { df[it] = (df[it] ?: 0) + 1 } }
         val n = units.size.toDouble()
@@ -41,8 +59,6 @@ class ExtractiveEngine : SummaryEngine {
             tf.mapValues { (w, f) -> f * (ln(n / (df[w] ?: 1)) + 1.0) }
         }
         val norms = vectors.map { v -> sqrt(v.values.sumOf { it * it }) }
-
-        // Similarity graph.
         val sim = Array(units.size) { DoubleArray(units.size) }
         for (i in units.indices) for (j in i + 1 until units.size) {
             if (norms[i] == 0.0 || norms[j] == 0.0) continue
@@ -53,8 +69,6 @@ class ExtractiveEngine : SummaryEngine {
             sim[i][j] = s
             sim[j][i] = s
         }
-
-        // TextRank power iteration.
         val damping = 0.85
         var score = DoubleArray(units.size) { 1.0 }
         val outSum = DoubleArray(units.size) { i -> sim[i].sum() }
@@ -65,7 +79,17 @@ class ExtractiveEngine : SummaryEngine {
             }
             score = next
         }
+        return sim to score
+    }
 
+    /** Returns the [count] most central units of [text], in their original order. */
+    fun rank(text: String, count: Int, conversation: Boolean): List<String> {
+        val units = segment(text, conversation)
+        if (units.isEmpty()) return emptyList()
+        if (units.size <= count) return units.map { shorten(it) }
+
+        val tokens = units.map { tokenize(it) }
+        val (sim, score) = graph(units, tokens)
         // Heuristic boosts: decisions, deadlines, problems, asks; slight preference for
         // recent messages in chats (what's latest usually matters most) and early sentences
         // in articles (lede).

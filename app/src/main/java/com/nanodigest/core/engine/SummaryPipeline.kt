@@ -69,8 +69,9 @@ class SummaryPipeline(
                 EngineMode.GEMINI_NANO -> true
                 EngineMode.AUTO -> languageSupportedByNano && nano.availability(config).canRun
             }
-            if (mode == EngineMode.AUTO && !languageSupportedByNano) {
-                send(SummaryEvent.Notice("Gemini Nano summarizes English, Japanese and Korean only — using the offline engine."))
+            // Only worth mentioning when Gemini Nano would otherwise have been used.
+            if (mode == EngineMode.AUTO && !languageSupportedByNano && nano.availability(config).canRun) {
+                send(SummaryEvent.Notice("Gemini Nano only reads English, Japanese and Korean, so Quick summary was used."))
             }
 
             val (summary, chunks, engineUsed) = if (useNanoFirst) {
@@ -81,7 +82,7 @@ class SummaryPipeline(
                     throw e
                 } catch (t: Throwable) {
                     if (mode != EngineMode.AUTO) throw SummaryFailedException(GenAiErrors.describe(t), t)
-                    send(SummaryEvent.Notice("Gemini Nano failed (${GenAiErrors.describe(t)}) — switched to the offline engine."))
+                    send(SummaryEvent.Notice("Gemini Nano couldn't finish, so Quick summary was used instead."))
                     send(SummaryEvent.Partial(""))
                     firstTokenAt = null
                     val (s, c) = execute(extractive)

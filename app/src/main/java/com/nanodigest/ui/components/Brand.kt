@@ -43,10 +43,10 @@ import com.nanodigest.ui.theme.SuccessGreen
 @Composable
 fun BrandMark(modifier: Modifier = Modifier) {
     Box(
-        modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(BrandGradient),
+        modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(BrandGradient),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Outlined.AutoAwesome, null, tint = Color.White, modifier = Modifier.size(20.dp))
+        Icon(Icons.Outlined.AutoAwesome, null, tint = Color.White, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -95,7 +95,7 @@ fun GradientButton(text: String, onClick: () -> Unit, enabled: Boolean, modifier
     Box(
         modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(52.dp)
             .alpha(if (enabled) 1f else 0.4f)
             .clip(CircleShape)
             .background(BrandGradient)
@@ -105,7 +105,7 @@ fun GradientButton(text: String, onClick: () -> Unit, enabled: Boolean, modifier
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.AutoAwesome, null, tint = Color.White)
             Spacer(Modifier.width(10.dp))
-            Text(text, color = Color.White, style = MaterialTheme.typography.titleMedium)
+            Text(text, color = Color.White, style = MaterialTheme.typography.labelLarge)
         }
     }
 }
@@ -120,12 +120,12 @@ fun KeyPoints(summary: String, modifier: Modifier = Modifier) {
         lines.forEachIndexed { i, line ->
             Row {
                 Box(
-                    Modifier.size(26.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                    Modifier.size(24.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         "${i + 1}",
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }

@@ -12,7 +12,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /** The indigo → violet gradient used by the logo and the main action. */
 val BrandGradient = Brush.linearGradient(listOf(Color(0xFF6366F1), Color(0xFFA855F7)))
@@ -26,8 +25,8 @@ private val Light = lightColorScheme(
     onPrimaryContainer = Color(0xFF1C1356),
     secondary = Color(0xFF0E9F8E),
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFD2F5EF),
-    onSecondaryContainer = Color(0xFF00382F),
+    secondaryContainer = Color(0xFFE7E3FF),
+    onSecondaryContainer = Color(0xFF1C1356),
     tertiary = Color(0xFFD9692A),
     tertiaryContainer = Color(0xFFFFE8D9),
     onTertiaryContainer = Color(0xFF4A1F00),
@@ -53,8 +52,8 @@ private val Dark = darkColorScheme(
     onPrimaryContainer = Color(0xFFE7E3FF),
     secondary = Color(0xFF5FD9C7),
     onSecondary = Color(0xFF00382F),
-    secondaryContainer = Color(0xFF0F4A43),
-    onSecondaryContainer = Color(0xFFD2F5EF),
+    secondaryContainer = Color(0xFF3A2E8F),
+    onSecondaryContainer = Color(0xFFE7E3FF),
     tertiary = Color(0xFFFFB68A),
     tertiaryContainer = Color(0xFF5C2A08),
     onTertiaryContainer = Color(0xFFFFE8D9),
@@ -73,14 +72,15 @@ private val Dark = darkColorScheme(
     outlineVariant = Color(0xFF302E3C),
 )
 
+/**
+ * Material 3's standard type scale (sizes, line heights and tracking untouched, all in sp so
+ * the user's font-size setting is respected). Only weights are adjusted for hierarchy.
+ */
 private val AppTypography = Typography().run {
     copy(
-        headlineMedium = headlineMedium.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp),
-        headlineSmall = headlineSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.25).sp),
+        headlineSmall = headlineSmall.copy(fontWeight = FontWeight.SemiBold),
         titleLarge = titleLarge.copy(fontWeight = FontWeight.SemiBold),
         titleMedium = titleMedium.copy(fontWeight = FontWeight.SemiBold),
-        bodyLarge = bodyLarge.copy(lineHeight = 26.sp),
-        labelLarge = labelLarge.copy(fontWeight = FontWeight.SemiBold),
     )
 }
 

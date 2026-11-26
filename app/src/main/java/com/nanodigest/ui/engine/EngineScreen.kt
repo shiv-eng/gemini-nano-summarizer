@@ -128,7 +128,7 @@ fun EngineScreen(vm: EngineViewModel) {
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(20.dp))
-        Text("Settings", style = MaterialTheme.typography.headlineMedium)
+        Text("Settings", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(20.dp))
 
         SummaryMethodCard(status, settings.engineMode, onDownload = vm::download)

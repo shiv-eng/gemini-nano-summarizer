@@ -124,7 +124,7 @@ fun SummarizeScreen(vm: SummarizeViewModel) {
             Spacer(Modifier.width(10.dp))
             Text(
                 "Nano Digest",
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
                 softWrap = false,
                 modifier = Modifier.weight(1f),
@@ -149,8 +149,8 @@ fun SummarizeScreen(vm: SummarizeViewModel) {
             }
         }
 
-        Spacer(Modifier.height(28.dp))
-        Text("What did you miss?", style = MaterialTheme.typography.headlineMedium)
+        Spacer(Modifier.height(24.dp))
+        Text("What did you miss?", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(6.dp))
         Text(
             "Paste a group chat or an article and get the key points in seconds. Nothing leaves your phone.",
@@ -248,7 +248,7 @@ fun SummarizeScreen(vm: SummarizeViewModel) {
 
         Spacer(Modifier.height(20.dp))
         if (state.running) {
-            OutlinedButton(onClick = vm::cancel, modifier = Modifier.fillMaxWidth().height(56.dp), shape = CircleShape) {
+            OutlinedButton(onClick = vm::cancel, modifier = Modifier.fillMaxWidth().height(52.dp), shape = CircleShape) {
                 Text("Stop")
             }
         } else {
@@ -288,7 +288,7 @@ fun SummarizeScreen(vm: SummarizeViewModel) {
                 Spacer(Modifier.height(20.dp))
                 SoftCard {
                     Column(Modifier.padding(20.dp)) {
-                        Text("Key points", style = MaterialTheme.typography.titleLarge)
+                        Text("Key points", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(16.dp))
                         SelectionContainer { KeyPoints(state.output) }
                         state.result?.let { r ->

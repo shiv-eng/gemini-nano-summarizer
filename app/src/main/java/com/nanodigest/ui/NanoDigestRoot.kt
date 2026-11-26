@@ -1,5 +1,6 @@
 package com.nanodigest.ui
 
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -88,7 +89,10 @@ fun NanoDigestRoot(container: AppContainer) {
         NavHost(
             navController = nav,
             startDestination = Tab.SUMMARIZE.route,
-            modifier = Modifier.padding(bottom = padding.calculateBottomPadding()).consumeWindowInsets(padding),
+            // Only the bottom bar's space is taken here; each screen's TopAppBar handles the status bar.
+            modifier = Modifier
+                .padding(bottom = padding.calculateBottomPadding())
+                .consumeWindowInsets(PaddingValues(bottom = padding.calculateBottomPadding())),
         ) {
             composable(Tab.SUMMARIZE.route) { SummarizeScreen(summarizeVm) }
             composable(Tab.HISTORY.route) { HistoryScreen(historyVm, onOpen = { nav.navigate("history/$it") }) }

@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Nano Digest</string>
+    <string name="share_label">Summarize with Nano Digest</string>
+    <string name="process_text_label">Summarize</string>
+</resources>

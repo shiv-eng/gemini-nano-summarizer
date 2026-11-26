@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Three bullet lines with a sparkle: "many messages -> 3 bullets" -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M36,42m-3.5,0a3.5,3.5 0,1 1,7 0a3.5,3.5 0,1 1,-7 0" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M36,54m-3.5,0a3.5,3.5 0,1 1,7 0a3.5,3.5 0,1 1,-7 0" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M36,66m-3.5,0a3.5,3.5 0,1 1,7 0a3.5,3.5 0,1 1,-7 0" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M45,39.5h20a2.5,2.5 0,0 1,0 5h-20a2.5,2.5 0,0 1,0 -5z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M45,51.5h26a2.5,2.5 0,0 1,0 5h-26a2.5,2.5 0,0 1,0 -5z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M45,63.5h16a2.5,2.5 0,0 1,0 5h-16a2.5,2.5 0,0 1,0 -5z" />
+    <path android:fillColor="#FFA5B4FC" android:pathData="M72,30l2.2,5.8l5.8,2.2l-5.8,2.2l-2.2,5.8l-2.2,-5.8l-5.8,-2.2l5.8,-2.2z" />
+</vector>

@@ -6,6 +6,16 @@ Nano Digest runs **Gemini Nano** on the phone through the **ML Kit GenAI Summari
 
 > This started from the blog post *"Gemini Nano on Android: Build a Private, On-Device AI Summarizer with ML Kit GenAI APIs"* by Anand Gaur and adds production features on top of it.
 
+## Download
+
+**[⬇ Download the latest APK](https://github.com/shiv-eng/gemini-nano-summarizer/releases/latest)** (Android 8.0+)
+
+1. Open the link on your phone and download `NanoDigest-<version>.apk` from **Assets**.
+2. Open the file. If Android asks, allow your browser or file manager to **install unknown apps**.
+3. Tap **Install**.
+
+Gemini Nano is used automatically on [supported phones](https://developers.google.com/ml-kit/genai#feature-device); every other phone uses the built-in Quick summary.
+
 ## Screenshot
 
 <img src="docs/screenshots/digest.png" width="280" alt="A digest of a team chat: what happened, the decision, next steps, and dates to add to the calendar">

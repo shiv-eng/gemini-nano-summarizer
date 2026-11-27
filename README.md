@@ -4,8 +4,6 @@
 
 Nano Digest runs **Gemini Nano** on the phone through the **ML Kit GenAI Summarization API**. There is no server, no API key and no per-request cost, and no text leaves the device. On phones that can't run Gemini Nano, the built-in **Quick summary** engine takes over, so the app works on every Android 8.0+ device.
 
-> This started from the blog post *"Gemini Nano on Android: Build a Private, On-Device AI Summarizer with ML Kit GenAI APIs"* by Anand Gaur and adds production features on top of it.
-
 ## Download
 
 **[⬇ Download the latest APK](https://github.com/shiv-eng/gemini-nano-summarizer/releases/latest)** (Android 8.0+)
@@ -26,7 +24,7 @@ Gemini Nano is used automatically on [supported phones](https://developers.googl
 
 ## Features
 
-### Core (from the blog)
+### Core
 - Gemini Nano summarization via `com.google.mlkit:genai-summarization`
 - Feature status check (`UNAVAILABLE / DOWNLOADABLE / DOWNLOADING / AVAILABLE`) before showing any AI action
 - Model download with a progress bar (`downloadFeature` + `DownloadCallback`)

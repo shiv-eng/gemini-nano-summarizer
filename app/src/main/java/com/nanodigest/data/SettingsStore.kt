@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+enum class ThemeMode(val label: String) { LIGHT("Light"), DARK("Dark"), SYSTEM("Follow phone") }
+
 data class Settings(
     val engineMode: EngineMode = EngineMode.AUTO,
     val defaultBullets: Int = 3,
@@ -16,6 +18,7 @@ data class Settings(
     val cleanChatExports: Boolean = true,
     val replaceLinks: Boolean = true,
     val autoRunSharedText: Boolean = true,
+    val theme: ThemeMode = ThemeMode.LIGHT,
 )
 
 /** Small, synchronous preferences store exposed as a StateFlow. */
@@ -42,6 +45,7 @@ class SettingsStore(context: Context) {
             cleanChatExports = prefs.getBoolean("cleanChatExports", d.cleanChatExports),
             replaceLinks = prefs.getBoolean("replaceLinks", d.replaceLinks),
             autoRunSharedText = prefs.getBoolean("autoRunSharedText", d.autoRunSharedText),
+            theme = runCatching { ThemeMode.valueOf(prefs.getString("theme", null) ?: d.theme.name) }.getOrDefault(d.theme),
         )
     }
 
@@ -55,6 +59,7 @@ class SettingsStore(context: Context) {
             .putBoolean("cleanChatExports", s.cleanChatExports)
             .putBoolean("replaceLinks", s.replaceLinks)
             .putBoolean("autoRunSharedText", s.autoRunSharedText)
+            .putString("theme", s.theme.name)
             .apply()
     }
 }

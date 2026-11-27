@@ -1,50 +1,39 @@
 package com.nanodigest.ui
 
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
+import android.widget.Toast
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
+import com.nanodigest.data.IncomingText
+import com.nanodigest.ui.components.readClipboard
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.nanodigest.AppContainer
 import com.nanodigest.ui.engine.EngineScreen
 import com.nanodigest.ui.engine.EngineViewModel
 import com.nanodigest.ui.history.HistoryDetailScreen
-import com.nanodigest.ui.history.HistoryScreen
+import com.nanodigest.ui.history.HomeScreen
 import com.nanodigest.ui.history.HistoryViewModel
 import com.nanodigest.ui.summarize.SummarizeScreen
 import com.nanodigest.ui.summarize.SummarizeViewModel
 
-private enum class Tab(val route: String, val label: String, val icon: ImageVector) {
-    SUMMARIZE("summarize", "Summarize", Icons.Outlined.AutoAwesome),
-    HISTORY("history", "History", Icons.Outlined.History),
-    ENGINE("settings", "Settings", Icons.Outlined.Tune),
+private object Routes {
+    const val HOME = "home"
+    const val NEW = "new?fresh={fresh}"
+    const val DIGEST = "digest/{id}"
+    const val SETTINGS = "settings"
+
+    fun new(fresh: Boolean) = "new?fresh=$fresh"
+    fun digest(id: Long) = "digest/$id"
 }
 
 @Composable
@@ -53,72 +42,67 @@ private inline fun <reified VM : ViewModel> containerViewModel(
     crossinline create: (AppContainer) -> VM,
 ): VM = viewModel(factory = viewModelFactory { initializer { create(container) } })
 
+/**
+ * Notes-app structure: a home grid of digests, a "new digest" editor, a digest page and
+ * settings. No tabs.
+ */
 @Composable
 fun NanoDigestRoot(container: AppContainer) {
     val nav = rememberNavController()
-    val backStack by nav.currentBackStackEntryAsState()
-    val currentRoute = backStack?.destination?.route
-
-    // Activity-scoped so they survive tab switches.
+    val context = LocalContext.current
     val summarizeVm = containerViewModel(container) { SummarizeViewModel(it) }
     val historyVm = containerViewModel(container) { HistoryViewModel(it) }
     val engineVm = containerViewModel(container) { EngineViewModel(it) }
 
-    // Text shared into the app always lands on the Summarize tab.
+    // Text shared into the app (Share sheet, "Summarize" on selected text, app shortcut)
+    // opens the editor, which picks it up and runs.
     val lastPosted by container.sharedText.lastPosted.collectAsStateWithLifecycle()
     LaunchedEffect(lastPosted) {
-        val route = nav.currentDestination?.route
-        // Before the graph exists we're about to start on Summarize anyway.
-        if (lastPosted != 0L && route != null && route != Tab.SUMMARIZE.route) nav.selectTab(Tab.SUMMARIZE)
-    }
-
-    Scaffold(
-        bottomBar = {
-            if (currentRoute in Tab.entries.map { it.route }) {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
-                    Tab.entries.forEach { tab ->
-                        NavigationBarItem(
-                            selected = currentRoute == tab.route,
-                            onClick = { nav.selectTab(tab) },
-                            icon = { Icon(tab.icon, contentDescription = null) },
-                            label = { Text(tab.label) },
-                            colors = NavigationBarItemDefaults.colors(
-                                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            ),
-                        )
-                    }
-                }
-            }
-        },
-    ) { padding ->
-        NavHost(
-            navController = nav,
-            startDestination = Tab.SUMMARIZE.route,
-            // Only the bottom bar's space is taken here; each screen's TopAppBar handles the status bar.
-            modifier = Modifier
-                .padding(bottom = padding.calculateBottomPadding())
-                .consumeWindowInsets(PaddingValues(bottom = padding.calculateBottomPadding())),
-        ) {
-            composable(Tab.SUMMARIZE.route) { SummarizeScreen(summarizeVm) }
-            composable(Tab.HISTORY.route) { HistoryScreen(historyVm, onOpen = { nav.navigate("history/$it") }) }
-            composable(Tab.ENGINE.route) { EngineScreen(engineVm) }
-            composable("history/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
-                HistoryDetailScreen(
-                    vm = historyVm,
-                    id = entry.arguments?.getLong("id") ?: 0L,
-                    onBack = { nav.popBackStack() },
-                    onReopen = { nav.selectTab(Tab.SUMMARIZE) },
-                )
+        // Runs after NavHost has set its graph. Each post opens the editor once.
+        if (lastPosted != 0L && container.sharedText.navigatedFor != lastPosted) {
+            container.sharedText.navigatedFor = lastPosted
+            if (nav.currentDestination?.route != Routes.NEW) {
+                nav.navigate(Routes.new(fresh = false)) { launchSingleTop = true }
             }
         }
     }
-}
 
-private fun NavHostController.selectTab(tab: Tab) {
-    navigate(tab.route) {
-        popUpTo(graph.findStartDestination().id) { saveState = true }
-        launchSingleTop = true
-        restoreState = true
+    NavHost(navController = nav, startDestination = Routes.HOME) {
+        composable(Routes.HOME) {
+            HomeScreen(
+                vm = historyVm,
+                onOpen = { nav.navigate(Routes.digest(it)) },
+                onNew = { nav.navigate(Routes.new(fresh = true)) },
+                onSettings = { nav.navigate(Routes.SETTINGS) },
+                onSummarizeClipboard = {
+                    val clip = readClipboard(context)
+                    if (clip.isNullOrBlank() || clip.trim().length < 20) {
+                        Toast.makeText(context, "Copy a chat or article first, or paste it here", Toast.LENGTH_LONG).show()
+                        nav.navigate(Routes.new(fresh = true))
+                    } else {
+                        container.sharedText.post(IncomingText(clip, "Copied text", autoRun = true, userInitiated = true))
+                    }
+                },
+            )
+        }
+        composable(Routes.NEW, arguments = listOf(navArgument("fresh") { type = NavType.BoolType; defaultValue = true })) { entry ->
+            SummarizeScreen(
+                vm = summarizeVm,
+                fresh = entry.arguments?.getBoolean("fresh") ?: true,
+                onClose = { nav.popBackStack() },
+                onSaved = { id ->
+                    nav.navigate(Routes.digest(id)) { popUpTo(Routes.HOME) }
+                },
+            )
+        }
+        composable(Routes.DIGEST, arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+            HistoryDetailScreen(
+                vm = historyVm,
+                id = entry.arguments?.getLong("id") ?: 0L,
+                onBack = { nav.popBackStack() },
+                onReopen = { nav.navigate(Routes.new(fresh = false)) },
+            )
+        }
+        composable(Routes.SETTINGS) { EngineScreen(engineVm, onBack = { nav.popBackStack() }) }
     }
 }

@@ -17,6 +17,8 @@ data class IncomingText(
     val text: String,
     val source: String,
     val autoRun: Boolean,
+    /** The user explicitly asked for a summary (button or shortcut), so run regardless of settings. */
+    val userInitiated: Boolean = false,
     val nonce: Long = System.nanoTime(),
 )
 
@@ -27,6 +29,9 @@ class SharedTextBus {
     /** Nonce of the most recent post; never cleared, so UI can react (e.g. switch tabs) even after consumption. */
     private val _lastPosted = MutableStateFlow(0L)
     val lastPosted: StateFlow<Long> = _lastPosted.asStateFlow()
+
+    /** The post the UI has already navigated for (survives activity recreation). */
+    var navigatedFor: Long = 0L
 
     fun post(text: IncomingText) {
         _incoming.value = text

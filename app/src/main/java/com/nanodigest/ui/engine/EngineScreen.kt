@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -18,7 +17,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -54,6 +58,7 @@ import com.nanodigest.core.engine.SummaryConfig
 import com.nanodigest.core.engine.SummaryEngine
 import com.nanodigest.core.engine.SummaryLanguage
 import com.nanodigest.data.Settings
+import com.nanodigest.data.ThemeMode
 import com.nanodigest.ui.SampleTexts
 import com.nanodigest.ui.components.BrandMark
 import com.nanodigest.ui.components.SoftCard
@@ -113,23 +118,30 @@ class EngineViewModel(private val c: AppContainer) : ViewModel() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EngineScreen(vm: EngineViewModel) {
+fun EngineScreen(vm: EngineViewModel, onBack: () -> Unit) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val status by vm.status.collectAsStateWithLifecycle()
     val bench by vm.benchmark.collectAsStateWithLifecycle()
     var advanced by rememberSaveable { mutableStateOf(false) }
 
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Settings") },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") } },
+            )
+        },
+    ) { padding ->
     Column(
         Modifier
             .fillMaxSize()
-            .statusBarsPadding()
+            .padding(padding)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp),
     ) {
-        Spacer(Modifier.height(20.dp))
-        Text("Settings", style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(8.dp))
 
         SummaryMethodCard(status, settings.engineMode, onDownload = vm::download)
 
@@ -154,8 +166,18 @@ fun EngineScreen(vm: EngineViewModel) {
         SettingSwitch("Tidy up chat exports", "Remove dates, times and system messages", settings.cleanChatExports) { v ->
             vm.update { it.copy(cleanChatExports = v) }
         }
-        SettingSwitch("Keep history", "Save summaries on this phone", settings.saveHistory) { v ->
-            vm.update { it.copy(saveHistory = v) }
+
+        Spacer(Modifier.height(20.dp))
+        Text("Appearance", style = MaterialTheme.typography.bodyLarge)
+        Spacer(Modifier.height(8.dp))
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            ThemeMode.entries.forEachIndexed { i, mode ->
+                SegmentedButton(
+                    selected = settings.theme == mode,
+                    onClick = { vm.update { it.copy(theme = mode) } },
+                    shape = SegmentedButtonDefaults.itemShape(i, ThemeMode.entries.size),
+                ) { Text(mode.label) }
+            }
         }
 
         Spacer(Modifier.height(16.dp))
@@ -230,6 +252,7 @@ fun EngineScreen(vm: EngineViewModel) {
         }
         Spacer(Modifier.height(32.dp))
     }
+}
 }
 
 @Composable

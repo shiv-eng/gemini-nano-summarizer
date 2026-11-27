@@ -50,6 +50,8 @@ data class SummarizeUiState(
     val result: SummaryEvent.Completed? = null,
     val notice: String? = null,
     val error: String? = null,
+    /** Set once the finished digest is saved, so the UI can open it. */
+    val savedId: Long? = null,
 ) {
     /** True unless we positively detected a language Gemini Nano can't summarize. */
     val languageSupported: Boolean
@@ -82,7 +84,7 @@ class SummarizeViewModel(private val c: AppContainer) : ViewModel() {
                 c.sharedText.consume(incoming.nonce)
                 _state.update { it.copy(input = incoming.text, sourceLabel = incoming.source, result = null, output = "", error = null) }
                 prepareNow()
-                if (incoming.autoRun && settings.value.autoRunSharedText) summarize()
+                if (incoming.autoRun && (incoming.userInitiated || settings.value.autoRunSharedText)) summarize()
             }
         }
         // Re-check Gemini Nano when the engine mode or download preference changes.
@@ -100,6 +102,15 @@ class SummarizeViewModel(private val c: AppContainer) : ViewModel() {
         _state.update { it.copy(input = text, sourceLabel = source, result = null, output = "", error = null, notice = null) }
         schedulePrepare(immediate = true)
     }
+
+    /** Fresh, empty editor (used each time "New digest" opens). */
+    fun reset() {
+        cancel()
+        _state.value = SummarizeUiState(bullets = settings.value.defaultBullets)
+        refreshEngine()
+    }
+
+    fun consumeSaved() = _state.update { it.copy(savedId = null) }
 
     fun clear() {
         cancel()
@@ -213,7 +224,9 @@ class SummarizeViewModel(private val c: AppContainer) : ViewModel() {
                         is SummaryEvent.Notice -> _state.update { it.copy(notice = event.message) }
                         is SummaryEvent.Completed -> {
                             _state.update { it.copy(result = event, output = event.summary, stage = null) }
-                            if (settings.value.saveHistory) save(snapshot, event)
+                            // Digests are the app's notes: always kept, and opened once saved.
+                            val id = save(snapshot, event)
+                            _state.update { it.copy(savedId = id) }
                         }
                     }
                 }
@@ -232,15 +245,9 @@ class SummarizeViewModel(private val c: AppContainer) : ViewModel() {
         _state.update { it.copy(running = false, stage = null) }
     }
 
-    private suspend fun save(snapshot: SummarizeUiState, result: SummaryEvent.Completed) {
-        val title = snapshot.chat?.let { chat ->
-            val names = chat.participants.take(3).joinToString(", ")
-            val more = (chat.participants.size - 3).takeIf { it > 0 }?.let { " +$it" }.orEmpty()
-            "Chat · $names$more"
-        } ?: snapshot.preparedText.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().trim().let {
-            if (it.length > 70) it.take(70).substringBeforeLast(' ') + "…" else it
-        }
-        c.repository.save(
+    private suspend fun save(snapshot: SummarizeUiState, result: SummaryEvent.Completed): Long {
+        val title = digestTitle(snapshot)
+        return c.repository.save(
             SummaryEntity(
                 title = title.ifBlank { "Untitled" },
                 sourceText = snapshot.preparedText,
@@ -256,6 +263,24 @@ class SummarizeViewModel(private val c: AppContainer) : ViewModel() {
                 createdAt = System.currentTimeMillis(),
             ),
         )
+    }
+
+    /**
+     * A short, human title: the group name from a WhatsApp export file ("WhatsApp Chat with
+     * Team.txt" → "Team"), the people in a chat, or the first line of an article.
+     */
+    private fun digestTitle(snapshot: SummarizeUiState): String {
+        snapshot.sourceLabel?.let { label ->
+            Regex("""(?i)^whatsapp chat (?:with|-)\s*(.+?)(?:\.(?:txt|zip))?$""").find(label)?.let { return it.groupValues[1].trim() }
+        }
+        snapshot.chat?.let { chat ->
+            val names = chat.participants.take(3).joinToString(", ")
+            val more = (chat.participants.size - 3).takeIf { it > 0 }?.let { " +$it" }.orEmpty()
+            return (names + more).ifBlank { "Chat" }
+        }
+        val first = snapshot.preparedText.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().trim()
+        val title = if (first.length > 60) first.take(60).substringBeforeLast(' ') + "…" else first
+        return title.ifBlank { "Untitled" }
     }
 
     /** Markdown version of the current summary, for copy/share. */
